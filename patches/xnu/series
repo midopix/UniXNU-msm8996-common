@@ -1,0 +1,10 @@
+# Ordered SoC XNU patch series for MSM8996.
+# One path per line, relative to the SoC repository; blank lines and lines
+# starting with '#' are ignored. An empty series is valid.
+#
+# Planned entries (add as implemented):
+#   msm8996-gic-3cell.patch      ArmCpu 3-cell interrupt specifier support
+#   msm8996-blsp.patch           BLSP I2C/SPI controller support
+#   msm8996-smmu-v2.patch        smmu-v2 quirk handling in ArmSmmu4K
+#   msm8996-ufs2.patch           UFS 2.0 controller support (NativeUfs8996)
+#   msm8996-mdp5.patch           MDP5 display controller support

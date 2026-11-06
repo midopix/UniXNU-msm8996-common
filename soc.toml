@@ -1,0 +1,14 @@
+schema_version = 2
+
+[soc]
+name = "msm8996"
+description = "Qualcomm MSM8996 (Snapdragon 820)"
+source_repository = "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+source_revision = "arch/arm64/boot/dts/qcom/msm8996.dtsi (mainline, read 2026-10-25)"
+hardware_notes = "Kryo 280 (4x Cortex-A72 class), GICv3 (3-cell specifiers), Adreno 530, MDP5, UFS 2.0, smmu-v2. Shared values verified against mainline and cross-checked against the G0245D stock board.dtb (QFIL package): BLSP2 UART2 @ 75b0000 is the console, BLSP2 I2C @ 75ba000 carries the Synaptics DSX touch, QCA6174 Wi-Fi rides PCIe/CNSS, splash framebuffer at 0x83401000."
+
+[components]
+# ArmCpu and ArmDTPlatform are architecture-generic (ARM64) and reusable.
+# GPU (Adreno740/AdrenoMetal) is A7xx-only and must NOT be selected here;
+# a new Adreno530 component is tracked as msm8996 work.
+include = ["ArmCpu", "ArmDTPlatform"]

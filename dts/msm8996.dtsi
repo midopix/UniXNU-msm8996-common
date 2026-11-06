@@ -1,0 +1,380 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// UniXNU shared SoC description for Qualcomm MSM8996 (Snapdragon 820).
+//
+// Hardware values are transcribed from the mainline Linux DTSI
+// (arch/arm64/boot/dts/qcom/msm8996.dtsi) and cross-checked against the
+// G0245D stock device tree (board.dtb from the QFIL package): the board
+// uses blsp2_uart2 as console and blsp2_i2c6 for the touch controller.
+//
+// Owner of these values: UniXNU-msm8996-common. Board enablement, RAM size
+// and reservations live in the board DTS (dts/g0245d.dts).
+/dts-v1/;
+
+/ {
+    compatible = "qcom,msm8996";
+    #address-cells = <2>;
+    #size-cells = <2>;
+    interrupt-parent = <&gic>;
+
+    cpus {
+        #address-cells = <2>;
+        #size-cells = <0>;
+        timebase-frequency = <19200000>;
+
+        // Kryo 280 is a Cortex-A72 compatible ARMv8.1 implementation.
+        // "arm,cortex-a72" keeps the XNU ArmCpu matching path working;
+        // "qcom,kryo" preserves the Linux/board identity.
+        cpu0: cpu@0 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a72", "qcom,kryo";
+            reg = <0 0x0>;
+        };
+        cpu1: cpu@1 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a72", "qcom,kryo";
+            reg = <0 0x1>;
+        };
+        cpu2: cpu@100 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a72", "qcom,kryo";
+            reg = <0 0x100>;
+        };
+        cpu3: cpu@101 {
+            device_type = "cpu";
+            compatible = "arm,cortex-a72", "qcom,kryo";
+            reg = <0 0x101>;
+        };
+    };
+
+    psci {
+        compatible = "arm,psci-1.0";
+        method = "smc";
+    };
+
+    timer {
+        compatible = "arm,armv8-timer";
+        interrupts = <1 13 0x8>, <1 14 0x8>, <1 11 0x8>, <1 10 0x8>;
+    };
+
+    soc {
+        compatible = "simple-bus";
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+
+        // GICv3: distributor 0x09bc0000 (64 KiB), redistributor 0x09c00000
+        // (1 MiB, single region, stride 0x40000). Mainline uses
+        // #interrupt-cells = <3>; UniXNU converters accept the controller
+        // cell count declared here. Verify ArmCpu against a 3-cell
+        // specifier before enabling secondary CPUs.
+        gic: interrupt-controller@9bc0000 {
+            compatible = "qcom,msm8996-gic-v3", "arm,gic-v3";
+            unixnu,adt-name = "intc";
+            reg = <0 0x9bc0000 0 0x10000>, <0 0x9c00000 0 0x100000>;
+            #address-cells = <0>;
+            #interrupt-cells = <3>;
+            interrupt-controller;
+            #redistributor-regions = <1>;
+            redistributor-stride = <0 0x40000>;
+        };
+
+        // UFS 2.0 host controller and QMP UFS PHY. Controller revision is
+        // UFS 2.0 (not 3.x/4.x like SM8550): the ShengUfs driver cannot be
+        // reused; a new NativeUfs8996 component is required.
+        ufshc: ufshc@624000 {
+            compatible = "qcom,msm8996-ufshc", "qcom,ufshc", "jedec,ufs-2.0";
+            unixnu,adt-name = "ufshc";
+            reg = <0 0x624000 0 0x2500>;
+            interrupts = <0 265 0x4>;
+            status = "disabled";
+        };
+
+        ufsphy: phy@627000 {
+            compatible = "qcom,msm8996-qmp-ufs-phy";
+            unixnu,adt-name = "ufsphy";
+            reg = <0 0x627000 0 0x1000>;
+            status = "disabled";
+        };
+
+        // Adreno 530 (A5xx family). The Adreno740/AdrenoMetal components
+        // target A7xx only; a new Adreno530 + A5xx Metal stack is required.
+        gpu: gpu@b00000 {
+            compatible = "qcom,adreno-530.2", "qcom,adreno";
+            unixnu,adt-name = "gpu";
+            reg = <0 0xb00000 0 0x3f000>;
+            reg-names = "kgsl_3d0_reg_memory";
+            interrupts = <0 300 0x4>;
+            status = "disabled";
+        };
+
+        // Adreno SMMU: qcom,smmu-v2 (arm,mmu-500 architecture).
+        // ArmSmmu4K matches arm,mmu-500 hardware; verify the v2 quirk
+        // (global interrupt, context bank count) before enabling GPU DMA.
+        adreno_smmu: iommu@b40000 {
+            compatible = "qcom,msm8996-smmu-v2", "qcom,adreno-smmu", "qcom,smmu-v2";
+            unixnu,adt-name = "adreno-smmu";
+            reg = <0 0xb40000 0 0x10000>;
+            #global-interrupts = <1>;
+            interrupts = <0 334 0x4>, <0 329 0x4>, <0 330 0x4>;
+            #iommu-cells = <1>;
+            status = "disabled";
+        };
+
+        // MDP5 display controller (not DPU like SM8550). Command-mode and
+        // video-mode panels are wired through DSI controllers below. The
+        // mdss node uses 1-cell child addressing (mainline layout); the
+        // vendor board.dts nests the same hardware under a ranges-mapped
+        // mdss node with the DSI PLL at 0x994400 (qcom,mdss_dsi_pll_8996_v2).
+        mdss: display-subsystem@900000 {
+            compatible = "qcom,msm8996-mdss";
+            unixnu,adt-name = "mdss";
+            reg = <0 0x900000 0 0x1000>, <0 0x9b0000 0 0x1040>, <0 0x9b8000 0 0x1040>;
+            reg-names = "mdss_phys", "vbif_phys", "vbif_nrt_phys";
+            interrupts = <0 83 0x4>;
+            #address-cells = <1>;
+            #size-cells = <1>;
+            status = "disabled";
+
+            mdp: display-controller@901000 {
+                compatible = "qcom,msm8996-mdp5", "qcom,mdp5";
+                unixnu,adt-name = "mdp";
+                reg = <0x901000 0x90000>;
+                reg-names = "mdp_phys";
+                status = "disabled";
+            };
+
+            dsi0: dsi@994000 {
+                compatible = "qcom,msm8996-dsi-ctrl", "qcom,mdss-dsi-ctrl";
+                unixnu,adt-name = "dsi0";
+                reg = <0x994000 0x400>;
+                reg-names = "dsi_ctrl";
+                status = "disabled";
+            };
+
+            dsi0_phy: phy@994400 {
+                compatible = "qcom,dsi-phy-14nm";
+                unixnu,adt-name = "dsi0-phy";
+                reg = <0x994400 0x100>, <0x994500 0x300>, <0x994800 0x188>;
+                reg-names = "dsi_phy", "dsi_phy_lane", "dsi_pll";
+                status = "disabled";
+            };
+        };
+
+        // Global clock controllers (needed by most peripheral drivers).
+        gcc: clock-controller@300000 {
+            compatible = "qcom,gcc-msm8996";
+            reg = <0 0x300000 0 0x90000>;
+            #clock-cells = <1>;
+        };
+
+        mmcc: clock-controller@8c0000 {
+            compatible = "qcom,mmcc-msm8996";
+            reg = <0 0x8c0000 0 0xb000>;
+            #clock-cells = <1>;
+        };
+
+        kryocc: clock-controller@6400000 {
+            compatible = "qcom,apcc-msm8996";
+            reg = <0 0x6400000 0 0x90000>;
+            #clock-cells = <1>;
+        };
+
+        // RPM / glink / smem: reused by QcomGlink, QcomSmem, QcomRpmh and
+        // QcomSmp2p components from the UniXNU catalog. The RPM message RAM
+        // doubles as the glink edge; the SMEM region is reached through it
+        // (no standalone smem node, matching the sm8550 reference layout).
+        rpm_msg_ram: sram@68000 {
+            compatible = "qcom,rpm-msg-ram";
+            unixnu,adt-name = "rpm-msg-ram";
+            reg = <0 0x68000 0 0x8000>;
+        };
+
+        // Hardware locks for SMEM/RPM shared state.
+        tcsr_mutex: hwlock@740000 {
+            compatible = "qcom,tcsr-mutex";
+            unixnu,adt-name = "tcsr-mutex";
+            reg = <0 0x740000 0 0x40000>;
+            #hwlock-cells = <1>;
+        };
+
+        // USB 3.0 (DWC3) for the Type-C data path.
+        usb3: usb@6af8800 {
+            compatible = "qcom,msm8996-dwc3", "qcom,dwc3";
+            unixnu,adt-name = "usb3";
+            reg = <0 0x6af8800 0 0x400>;
+            interrupts = <0 180 0x4>, <0 347 0x4>, <0 133 0x4>, <0 243 0x4>;
+            status = "disabled";
+        };
+
+        usb3_dwc3: usb@6a00000 {
+            compatible = "snps,dwc3";
+            unixnu,adt-name = "dwc3";
+            reg = <0 0x6a00000 0 0x10000>;
+            interrupts = <0 181 0x4>;
+            status = "disabled";
+        };
+
+        // PCIe endpoints 0..2. The G0245D Wi-Fi chip sits on PCIe (see the
+        // board inventory; confirm the lane from the stock DTS).
+        pcie0: pcie@600000 {
+            compatible = "qcom,pcie-msm8996", "qcom,pcie-common";
+            unixnu,adt-name = "pcie0";
+            reg = <0 0x600000 0 0x10000>;
+            status = "disabled";
+        };
+
+        pcie1: pcie@608000 {
+            compatible = "qcom,pcie-msm8996", "qcom,pcie-common";
+            unixnu,adt-name = "pcie1";
+            reg = <0 0x608000 0 0x10000>;
+            status = "disabled";
+        };
+
+        pcie2: pcie@610000 {
+            compatible = "qcom,pcie-msm8996", "qcom,pcie-common";
+            unixnu,adt-name = "pcie2";
+            reg = <0 0x610000 0 0x10000>;
+            status = "disabled";
+        };
+
+        // BLSP-based serial buses (I2C/SPI/UART). sheng uses GENI-based
+        // controllers (QcomGeniSpi); MSM8996 uses BSP-LP style BLSP
+        // peripherals, so a BLSP I2C/SPI/UART component is required for
+        // touch and panel bring-up. G0245D wiring (stock board.dts):
+        //   console  = blsp2_uart2 @ 75b0000 (SPI 114)
+        //   touch    = blsp2_i2c6  @ 75ba000 (SPI 106), Synaptics DSX @ 0x20
+        //   fingerprint = board-local spi@7579000 (SPI 99, not in mainline;
+        //       belongs to the device DTS, not this SoC file)
+        blsp1_uart2: serial@7570000 {
+            compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
+            unixnu,adt-name = "blsp1-uart2";
+            reg = <0 0x7570000 0 0x1000>;
+            interrupts = <0 108 0x4>;
+            status = "disabled";
+        };
+
+        blsp1_spi1: spi@7575000 {
+            compatible = "qcom,spi-qup-v2.2.1";
+            unixnu,adt-name = "blsp1-spi1";
+            reg = <0 0x7575000 0 0x600>;
+            interrupts = <0 95 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp1_i2c3: i2c@7577000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp1-i2c3";
+            reg = <0 0x7577000 0 0x1000>;
+            interrupts = <0 97 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp1_i2c6: i2c@757a000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp1-i2c6";
+            reg = <0 0x757a000 0 0x1000>;
+            interrupts = <0 100 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp2_uart2: serial@75b0000 {
+            compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
+            unixnu,adt-name = "blsp2-uart2";
+            reg = <0 0x75b0000 0 0x1000>;
+            interrupts = <0 114 0x4>;
+            status = "disabled";
+        };
+
+        blsp2_uart3: serial@75b1000 {
+            compatible = "qcom,msm-uartdm-v1.4", "qcom,msm-uartdm";
+            unixnu,adt-name = "blsp2-uart3";
+            reg = <0 0x75b1000 0 0x1000>;
+            interrupts = <0 115 0x4>;
+            status = "disabled";
+        };
+
+        blsp2_i2c1: i2c@75b5000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-i2c1";
+            reg = <0 0x75b5000 0 0x1000>;
+            interrupts = <0 101 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp2_i2c2: i2c@75b6000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-i2c2";
+            reg = <0 0x75b6000 0 0x1000>;
+            interrupts = <0 102 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp2_i2c3: i2c@75b7000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-i2c3";
+            reg = <0 0x75b7000 0 0x1000>;
+            interrupts = <0 103 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp2_i2c5: i2c@75b9000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-i2c5";
+            reg = <0 0x75b9000 0 0x1000>;
+            interrupts = <0 105 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp2_spi5: spi@75b9000 {
+            compatible = "qcom,spi-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-spi5";
+            reg = <0 0x75b9000 0 0x600>;
+            interrupts = <0 105 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        // G0245D touch bus: Synaptics DSX hangs off this QUP6 in I2C mode.
+        blsp2_i2c6: i2c@75ba000 {
+            compatible = "qcom,i2c-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-i2c6";
+            reg = <0 0x75ba000 0 0x1000>;
+            interrupts = <0 106 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        blsp2_spi6: spi@75ba000 {
+            compatible = "qcom,spi-qup-v2.2.1";
+            unixnu,adt-name = "blsp2-spi6";
+            reg = <0 0x75ba000 0 0x600>;
+            interrupts = <0 106 0x4>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "disabled";
+        };
+
+        // Crypto engine (software fallback path uses SoftwareAES).
+        crypto: crypto@67a000 {
+            compatible = "qcom,msm8996-crypto", "qcom,rng";
+            reg = <0 0x67a000 0 0x2000>;
+            status = "disabled";
+        };
+    };
+};
