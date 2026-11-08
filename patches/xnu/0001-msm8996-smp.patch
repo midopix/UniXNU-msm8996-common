@@ -1,0 +1,26 @@
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index d4909c7..cbb6c15 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -143,7 +143,7 @@ LEXT(reset_vector)
+ 	adrp	x19, EXT(ResetHandlerData)@page			// Get address of the reset handler data
+ 	add		x19, x19, EXT(ResetHandlerData)@pageoff
+ 	mrs		x15, MPIDR_EL1						// Load MPIDR to get CPU number
+-#if HAS_CLUSTER
++#if HAS_CLUSTER || defined(BCM2837)
+ 	and		x0, x15, #0xFFFF					// CPU number in Affinity0, cluster ID in Affinity1
+ #else
+ 	and		x0, x15, #0xFF						// CPU number is in MPIDR Affinity Level 0
+diff --git a/pexpert/pexpert/arm64/board_config.h b/pexpert/pexpert/arm64/board_config.h
+index 40781c9..a4163d5 100644
+--- a/pexpert/pexpert/arm64/board_config.h
++++ b/pexpert/pexpert/arm64/board_config.h
+@@ -135,7 +135,7 @@
+ 
+ #define MAX_L2_CLINE                   6
+ #define MAX_CPUS                       4
+-#define MAX_CPU_CLUSTERS               1
++#define MAX_CPU_CLUSTERS               2 /* msm8996: Kryo 280 has two clusters (cpu0/1, cpu2/3) */
+ 
+ #define CORE_NCTRS                     8 /* Placeholder; KPC is not enabled for this target */
+ #endif  /* ARM64_BOARD_CONFIG_BCM2837 */
