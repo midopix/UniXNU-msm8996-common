@@ -2,9 +2,39 @@
 # One path per line, relative to the SoC repository; blank lines and lines
 # starting with '#' are ignored. An empty series is valid.
 #
-# Planned entries (add as implemented):
-#   msm8996-gic-3cell.patch      ArmCpu 3-cell interrupt specifier support
-#   msm8996-blsp.patch           BLSP I2C/SPI controller support
-#   msm8996-smmu-v2.patch        smmu-v2 quirk handling in ArmSmmu4K
-#   msm8996-ufs2.patch           UFS 2.0 controller support (NativeUfs8996)
-#   msm8996-mdp5.patch           MDP5 display controller support
+# 0001: SMP / dual-cluster bring-up for Kryo 280 (4 CPUs, 2 clusters).
+#       Adapted from sm8550 native-smp-secondary.patch: MAX_CPU_CLUSTERS 1->2
+#       and start.s MPIDR Affinity1 path. Required before secondary CPUs boot.
+0001-msm8996-smp.patch
+#
+# ---------------------------------------------------------------------------
+# Resolved by source review (2026-11-07) — these are NOT patches: there is no
+# XNU core code gap to fix. Do not author empty diffs for them.
+#
+#   gic-v3-3cell  XNU's IODTMapOneInterrupt parses interrupt specifiers using
+#                 the controller's #interrupt-cells at runtime; ArmCpu does
+#                 not read node "interrupts" at all (PSCI + direct GIC MMIO).
+#                 Three-cell GICv3 specifiers need no code change. The only
+#                 open question is real-hardware SMP bring-up of cpu1..cpu3,
+#                 which is a DTS/observation task, not a patch.
+#   smmu-v2       ArmSmmu4K already targets arm,mmu-500, i.e. SMMUv2. There
+#                 is no "v2 quirk branch" to add. The real gap is an owning
+#                 IOService plus clock/context-bank initialisation, which
+#                 belongs in a component and requires device observation.
+#
+# The other three items are likewise NOT XNU core diffs. NativeUfs8996,
+# Blsp8996, Adreno530 and Msm8996Platform are registered in components.toml
+# and the three drivers are force-loaded into kernel.macho via
+# CONFIG_XNU_EXTRA_LD_ARCHIVES. Their hardware bindings are enabled in
+# UniXNU-g0245d/dts/g0245d.dts (status = "okay" on &ufshc, &gpu,
+# &blsp2_i2c6), because devicetree.py only exports enabled nodes to the ADT.
+#
+# What remains for these three is real-hardware qualification only:
+#   msm8996-blsp     QUP v2 clock/reset + FIFO/block-mode I2C transactions.
+#   msm8996-ufs2     HCE/HCS, UIC DME_LINKSTARTUP, UTRL/UTMRL, NOP-OUT,
+#                    unit descriptors, IOBlockStorageDevice.
+#   msm8996-mdp5     MDP5/DSI0 rails, PHY 28nm init, ft8716 panel timings and
+#                    scanout. Blocked offline: the mdss node has no "ranges"
+#                    property, so its 1-cell children cannot be exported to
+#                    the ADT until the bus description is fixed.
+# ---------------------------------------------------------------------------

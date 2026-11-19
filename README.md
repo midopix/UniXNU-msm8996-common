@@ -59,8 +59,22 @@ verified board overlay lives in `UniXNU-g0245d/dts/g0245d.dts`.
 
 ## Status
 
-Planning / repository bootstrap. No hardware bring-up has been performed.
-Track progress in the device repository's `porting.toml`.
+Hardware bring-up is under way on the reference device. Firmware side (stage 1) is
+closed: the Mu-Silicium platform builds, the BootShim container boots and the UniXNU
+menu renders on the real panel. Two SoC-level facts were established on hardware and
+are worth reading before touching timer or interrupt code:
+
+- **`PcdArmArchTimer*IntrNum` takes GIC INTIDs, not the device-tree PPI index.** The
+  8996 PPIs 13/14/11/10 are INTIDs 29/30/27/26. With the PPI values the timer handler
+  is registered on SGIs and every `EVT_TIMER` consumer dies silently — a frozen BDS
+  countdown and dead keypad debounce, from one defect. Details in
+  `UniXNU-g0245d/docs/timer-ppi-finding.md`.
+- The vendor `xbl.elf` itself carries the upstream `ArmGicDxe` and `TimerDxe`, so the
+  standard ArmPkg timer path applies to this SoC; no Qualcomm private timer exists.
+
+Storage, GPU, display-controller and BLSP drivers are still missing, so the device
+remains on the firmware framebuffer. Track per-subsystem progress in the device
+repository's `porting.toml`.
 
 ## License
 
